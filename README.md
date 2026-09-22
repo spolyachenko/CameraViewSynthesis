@@ -15,15 +15,15 @@ The model takes a tensor with the following six channels:
 5. **Additional input channels** — reserved/represented by the six-channel model input configuration.
 
 <p align="center">
-  <img src="post_train_examples/Figure_1.png" alt="Camera View Synthesis example 1" width="800">
+  <img src="Post_train_examples/Figure_1.png" alt="Camera View Synthesis example 1" width="800">
 </p>
 
 <p align="center">
-  <img src="post_train_examples/Figure_2.png" alt="Camera View Synthesis example 2" width="800">
+  <img src="Post_train_examples/Figure_2.png" alt="Camera View Synthesis example 2" width="800">
 </p>
 
 <p align="center">
-  <img src="post_train_examples/Figure_3.png" alt="Camera View Synthesis example 3" width="800">
+  <img src="Post_train_examples/Figure_3.png" alt="Camera View Synthesis example 3" width="800">
 </p>
 
 The current model is instantiated as:
