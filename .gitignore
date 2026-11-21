@@ -1,3 +1,14 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:9a99ef66b81283e1088f1383cb96cfd61d324cf7c27b03d9ed974b2be6590418
-size 85
+__pycache__/
+src/__pycache__
+.venv/
+.vscode/
+
+cv_dataset_small/
+Cached_images
+mlruns
+mlflow.db
+baseline_ensemble
+
+runs
+
+SPEC.md
