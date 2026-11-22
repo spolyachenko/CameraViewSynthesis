@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Resize
 
 from model import CustomUNet
-from preprocessing import (
+from src.preprocessing import (
     CACHE_DIR,
     TRAIN_DIR,
     LidarImgDataset,

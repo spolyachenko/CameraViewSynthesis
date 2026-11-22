@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.transforms import Resize
 
-from projections import build_lidar_projections, TS_LIST, CAMERA_NAMES
+from src.projections import build_lidar_projections, TS_LIST, CAMERA_NAMES
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TEST_DIR = PROJECT_ROOT / "cv_dataset_small" / "test"

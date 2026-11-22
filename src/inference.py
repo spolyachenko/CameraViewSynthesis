@@ -7,8 +7,8 @@ from torchvision.io import decode_image
 from torchvision.transforms import Resize
 from pathlib import Path
 
-from projections import build_lidar_projections
-from model import load_checkpoint
+from src.projections import build_lidar_projections
+from src.model import load_checkpoint
 
 
 def predict(model: nn.Module, sample_path: Path, device: torch.device, transforms: nn.Sequential) -> torch.Tensor:

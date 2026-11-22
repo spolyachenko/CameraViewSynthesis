@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torchvision.io import decode_image
+from concurrent.futures import ThreadPoolExecutor
 
 TS_LIST = ("t0", "t1", "target")
 CAMERA_NAMES = ("front", "left_fwd", "left_bwd", "right_fwd", "right_bwd", "rear")
@@ -22,16 +23,30 @@ def build_lidar_projections(
         cache_sample_path = cache_dir / sample_path.name
         cache_sample_path.mkdir(exist_ok=True)
 
-    loaded = np.load(file=sample_path / 'input' / 'lidar.npz')
-    intensity: torch.Tensor = torch.tensor(loaded['intensity']).to(device)
+    def load_array(path, key):
+        with np.load(path, allow_pickle=False) as data:
+            return data[key]
 
-    xyz: torch.Tensor = torch.tensor(loaded['xyz'])
-    colors = torch.zeros_like(xyz).to(device)
+    with torch.cuda.nvtx.range("Load NPZ"):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            lidar_path = sample_path / 'input' / 'lidar.npz'
+        
+            intensity_future = executor.submit(load_array, lidar_path, 'intensity')
+            xyz_future = executor.submit(load_array, lidar_path, 'xyz')
 
-    ones = torch.ones(size=(xyz.size(dim=0), 1))
-    points: torch.Tensor = torch.cat([xyz, ones], dim=1).to(device)
+            intensity_np = intensity_future.result()
+            xyz_np = xyz_future.result()
 
-    meta: dict = json.loads(sample_path.joinpath('meta.json').read_text())
+    with torch.cuda.nvtx.range("H2D transfer"):
+        intensity = torch.from_numpy(intensity_np).to(device, non_blocking=False)
+        xyz = torch.from_numpy(xyz_np).to(device, non_blocking=False)
+
+    colors = torch.zeros_like(xyz)
+    ones = torch.ones(size=(xyz.size(dim=0), 1), device=device)
+    points: torch.Tensor = torch.cat([xyz, ones], dim=1)
+
+    with torch.cuda.nvtx.range("Loading metadata"):
+        meta: dict = json.loads(sample_path.joinpath('meta.json').read_text())
     trg_cam = meta['target_camera']
 
     def project_batch(ts: str, cams: list[str]):
@@ -95,36 +110,44 @@ def build_lidar_projections(
     precomp: dict[tuple[str, str], tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
     
     for ts in ['t0', 't1']:
-        z, x, y = project_batch(ts, list(CAMERA_NAMES))
+        with torch.cuda.nvtx.range(f"Batch projecting for ts {ts}"):
+            z, x, y = project_batch(ts, list(CAMERA_NAMES))
         
         for b, cam in enumerate(CAMERA_NAMES):
-            intr = meta['intrinsics'][cam]
-            depth_map, used_point_ids, is_valid_pixel = depth_maps(z[b], x[b], y[b], intr['width'], intr['height'])
-            precomp[(ts, cam)] = (depth_map, used_point_ids, is_valid_pixel)
-
-            original_img = decode_image(sample_path / 'input' / ts / (cam + '.jpg')) \
-                .float().flatten(start_dim=1).to(device) / 255.0
-            colors[used_point_ids] = original_img[:, is_valid_pixel].permute(1, 0)
+            with torch.cuda.nvtx.range(f"Scatter reduce amin for cam {cam}"):
+                intr = meta['intrinsics'][cam]
+                depth_map, used_point_ids, is_valid_pixel = depth_maps(z[b], x[b], y[b], intr['width'], intr['height'])
+                precomp[(ts, cam)] = (depth_map, used_point_ids, is_valid_pixel)
+                
+            with torch.cuda.nvtx.range("Decode img"):
+                original_img = decode_image(sample_path / 'input' / ts / (cam + '.jpg')) \
+                    .float().flatten(start_dim=1).to(device) / 255.0
+            
+            with torch.cuda.nvtx.range("Color assign"):
+                colors[used_point_ids] = original_img[:, is_valid_pixel].permute(1, 0)
 
     for ts in ['t0', 't1', 'target']:
         cams = [trg_cam] if ts == 'target' else list(CAMERA_NAMES)
         for cam in cams:
             if ts == 'target':
-                z, x, y = project_batch(ts, cams)
-                b = cams.index(cam)
-                intr = meta['intrinsics'][cam]
-                depth_map, used_point_ids, is_valid_pixel = depth_maps(z[b], x[b], y[b], intr['width'], intr['height'])
+                with torch.cuda.nvtx.range(f"Project colored PC to {ts}"):
+                    z, x, y = project_batch(ts, cams)
+                    b = cams.index(cam)
+                    intr = meta['intrinsics'][cam]
+                    depth_map, used_point_ids, is_valid_pixel = depth_maps(z[b], x[b], y[b], intr['width'], intr['height'])
             else:
                 depth_map, used_point_ids, is_valid_pixel = precomp[(ts, cam)]
 
             if cache_sample_path is None and ts != 'target':
                 continue
-
-            final_tensor = construct(cam, ts, depth_map, used_point_ids, is_valid_pixel)
-            if cache_sample_path is None:
+            
+            with torch.cuda.nvtx.range(f"Construct final tensor for {ts}_{cam}"):
+                final_tensor = construct(cam, depth_map, used_point_ids, is_valid_pixel)
+            
+            if cache_sample_path is None: 
                 return final_tensor
+            
             torch.save(final_tensor.to(device='cpu'), cache_sample_path / (cam + '_' + ts + '.pt'))
-
             trg_src = (sample_path / 'target' / (cam + '.jpg')) if ts == 'target' \
                 else (sample_path / 'input' / ts / (cam + '.jpg'))
             trg = transforms(decode_image(trg_src).float() / 255.0)
