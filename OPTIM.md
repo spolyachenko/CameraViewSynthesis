@@ -14,3 +14,5 @@ intensity = torch.tensor(loaded['intensity']).to(device)
 xyz       = torch.tensor(loaded['xyz'])
 colors    = torch.zeros_like(xyz).to(device)
 ```
+
+Work in progress
