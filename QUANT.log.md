@@ -1,3 +1,4 @@
+```text
 Device: cuda
 
 ===== FP32 BASELINE =====
@@ -45,3 +46,4 @@ Saved QAT model: unet_int8_qat.pth
 FP32:    0.10518752
 INT8 PTQ: 0.11849772
 INT8 QAT: 0.11116522
+```
