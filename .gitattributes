@@ -1,2 +1,6 @@
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
+assets/models/model_int8.engine filter=lfs diff=lfs merge=lfs -text
+assets/models/model_int8.onnx filter=lfs diff=lfs merge=lfs -text
+assets/models/unet_int8_ptq.pth filter=lfs diff=lfs merge=lfs -text
+assets/models/unet_int8_qat.pth filter=lfs diff=lfs merge=lfs -text
